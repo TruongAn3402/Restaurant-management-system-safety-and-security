@@ -24,8 +24,7 @@ Here are some illustrations
 ![image](https://github.com/TruongAn3402/Restaurant-manager/assets/161707976/7187f408-914e-450a-8791-48225c7d09f1)
 #### Monitor user actions
 ![image](https://github.com/TruongAn3402/Restaurant-manager/assets/161707976/8acae07c-714d-442e-b11b-830fdff6de7a)
-</p>
-And much more, see more here 
+#### And much more, see more here 
 `Bao_Cao_ATBMHTTT_bancuoi.docx`
-</p>
+
 The application performed main functions such as login, logout and employee management. Besides, there are still many limitations in technical expertise that have not been well resolved. During use, some inadequacies may occur that affect the customer's use of the application. Therefore, the team's development orientation is towards user experience, creating a more beautiful interface and applying new technologies to the application. Improve professional knowledge and career skills to create a foundation for the future.
