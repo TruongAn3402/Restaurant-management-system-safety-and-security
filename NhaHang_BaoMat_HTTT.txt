@@ -1,0 +1,918 @@
+--CẤP QUYỀN
+GRANT ALL PRIVILEGES TO NV001;
+
+drop table nhanvien;
+drop table khachhang;
+drop table monan;
+drop table banan;
+drop table hoadon;
+drop table chitiethoadon;
+
+select * from NV001.nhanvien;
+select * from NV001.khachhang;
+select * from NV001.monan;
+select * from NV001.banan;
+select * from NV001.hoadon;
+select * from NV001.chitiethoadon;
+
+--- [ Tao bang ] ---
+CREATE TABLE NhanVien 
+(
+    MaNV VARCHAR2(50) PRIMARY KEY,
+    TenNV VARCHAR2(50),
+    GioiTinh VARCHAR2(100),
+    NgaySinh DATE,
+    DiaChi VARCHAR2(100),
+    SoDT VARCHAR2(500),
+    Email VARCHAR2(100),
+    Pass VARCHAR2(100),
+    Quyen VARCHAR2(50)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON NhanVien TO NV001;
+
+CREATE TABLE KhachHang 
+(
+    MaKH VARCHAR2(50) PRIMARY KEY,
+    TenKH VARCHAR2(500),
+    GioiTinh VARCHAR2(500),
+    NgaySinh DATE,
+    DiaChi VARCHAR2(500),
+    SoDT VARCHAR2(500)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON KhachHang TO NV001;
+
+
+CREATE TABLE BanAn 
+(
+    MaBan VARCHAR2(50) PRIMARY KEY,
+    TenBan VARCHAR2(500),
+    TrangThai VARCHAR2(500)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON BanAn TO NV001;
+
+
+CREATE TABLE MonAn 
+(
+    MaMon VARCHAR2(50) PRIMARY KEY,
+    TenMon VARCHAR2(500),
+    LoaiMon VARCHAR2(500),
+    GiaTien NUMBER(10)
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON MonAn TO NV001;
+
+
+CREATE TABLE HoaDon 
+(
+    MaHD VARCHAR2(50) PRIMARY KEY,
+    NgayHD DATE,
+    MaNV VARCHAR2(50),
+    MaKH VARCHAR2(50),
+    MaBan VARCHAR2(50),
+    TongTien NUMBER(10),
+    
+    CONSTRAINT fk_HoaDon_NhanVien FOREIGN KEY (MaNV) REFERENCES NhanVien(MaNV),
+    CONSTRAINT fk_HoaDon_KhachHang FOREIGN KEY (MaKH) REFERENCES KhachHang(MaKH),
+    CONSTRAINT fk_HoaDon_BanAn FOREIGN KEY (MaBan) REFERENCES BanAn(MaBan)
+    ON DELETE CASCADE
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON HoaDon TO NV001;
+
+
+CREATE TABLE ChiTietHoaDon 
+(
+    MaCTHD VARCHAR2(50) PRIMARY KEY,
+    MaHD VARCHAR2(50),
+    MaMon VARCHAR2(50),
+    SoLuong NUMBER(10),
+    
+    CONSTRAINT fk_ChiTietHoaDon_HoaDon FOREIGN KEY (MaHD) REFERENCES HoaDon(MaHD),
+    CONSTRAINT fk_ChiTietHoaDon_MonAn FOREIGN KEY (MaMon) REFERENCES MonAn(MaMon) 
+    ON DELETE CASCADE
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON ChiTietHoaDon TO NV001;
+
+--===========================================THÊM NHÂN VIÊN AES==============================================
+--Thủ tục thêm nhân viên sử dụng mã hóa đối xứng AES
+CREATE OR REPLACE PROCEDURE ThemNhanVien_AES(
+    p_MaNV VARCHAR2,
+    p_TenNV VARCHAR2,
+    p_GioiTinh VARCHAR2,
+    p_NgaySinh DATE,
+    p_DiaChi VARCHAR2,
+    p_SoDT VARCHAR2,
+    p_Email VARCHAR2,
+    p_Pass VARCHAR2,
+    p_Quyen VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); -- Thay thế bằng khóa mã hóa thực tế
+    Mahoa_pass RAW(32);
+    Mahoa_email RAW(32);
+BEGIN
+    -- Mã hóa mật khẩu và email
+    Mahoa_pass := DBMS_CRYPTO.ENCRYPT(
+    src => UTL_RAW.CAST_TO_RAW(p_Pass),
+    typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+    key => v_key
+    );
+    
+    Mahoa_email := DBMS_CRYPTO.ENCRYPT(
+        src => UTL_RAW.CAST_TO_RAW(p_Email),
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key
+    );
+
+    INSERT INTO NhanVien (MaNV, TenNV, GioiTinh, NgaySinh, DiaChi, SoDT, Email, Pass, Quyen)
+    VALUES (p_MaNV, p_TenNV, p_GioiTinh, p_NgaySinh, p_DiaChi, p_SoDT, Mahoa_email, Mahoa_pass,p_Quyen);
+    COMMIT;
+END;
+/
+DROP PROCEDURE ThemNhanVien;
+/
+BEGIN
+    ThemNhanVien_AES('NV001', 'Nguyen Van An', 'Nam', TO_DATE('1990-01-01', 'YYYY-MM-DD'), '140 Le Trong Tan', '0332063456', 'nguyenvanan@gmail.com', 'TanHuy9999', 'NhanVien');
+END;
+/
+--================================================CẬP NHẬT NHÂN VIÊN AES==================================================
+CREATE OR REPLACE PROCEDURE CapNhatNhanVien(
+    p_MaNV VARCHAR2,
+    p_TenNV VARCHAR2,
+    p_GioiTinh VARCHAR2,
+    p_NgaySinh DATE,
+    p_DiaChi VARCHAR2,
+    p_SoDT VARCHAR2,
+    p_Email VARCHAR2,
+    p_Quyen VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); -- Thay thế bằng khóa mã hóa thực tế
+    Mahoa_pass RAW(32);
+    Mahoa_email RAW(32);
+BEGIN
+    -- Mã hóa email
+    Mahoa_email := DBMS_CRYPTO.ENCRYPT(
+        src => UTL_RAW.CAST_TO_RAW(p_Email),
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key
+    );
+    UPDATE NhanVien
+    SET TenNV = p_TenNV,
+        GioiTinh = p_GioiTinh,
+        NgaySinh = p_NgaySinh,
+        DiaChi = p_DiaChi,
+        SoDT = p_SoDT,
+        Email = Mahoa_email,
+        Quyen = p_Quyen
+    WHERE MaNV = p_MaNV; 
+    COMMIT;
+END;
+/
+--======================================ĐỔI MẬT KHẨU========================================
+CREATE OR REPLACE PROCEDURE DoiMatKhau(
+    p_user VARCHAR2,
+    p_old_pass VARCHAR2,
+    p_new_pass VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx');
+    v_old_password RAW(32); -- Khai báo biến lưu trữ mật khẩu đã được mã hóa
+BEGIN
+    BEGIN
+        -- Lấy mật khẩu đã được mã hóa của người dùng từ cơ sở dữ liệu
+        SELECT Pass
+        INTO v_old_password
+        FROM NhanVien
+        WHERE MaNV = p_user;
+
+        -- Giải mã mật khẩu đã lưu trữ
+        DECLARE
+            GiaiMa_Pass VARCHAR2(100);
+        BEGIN
+            GiaiMa_Pass := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+                src => v_old_password,
+                typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+                key => v_key,
+                iv => NULL
+            ));
+
+            -- Kiểm tra xem mật khẩu cũ của người dùng có đúng không
+            IF GiaiMa_Pass = p_old_pass THEN
+                -- Nếu mật khẩu cũ đúng, thay đổi mật khẩu
+                EXECUTE IMMEDIATE 'ALTER USER ' || p_user || ' IDENTIFIED BY ' || p_new_pass;
+                
+                COMMIT;
+                DBMS_OUTPUT.PUT_LINE('Đổi mật khẩu thành công cho người dùng ' || p_user);
+            ELSE
+                DBMS_OUTPUT.PUT_LINE('Lỗi: Mật khẩu cũ không đúng');
+            END IF;
+        EXCEPTION
+            WHEN OTHERS THEN
+                DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+                ROLLBACK;
+        END;
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+            ROLLBACK;
+    END;
+END;
+/
+
+BEGIN
+    DoiMatKhau('NV001', 'TanHuy9999', '123');
+END;
+/
+
+CREATE OR REPLACE PROCEDURE DoiMatKhau_NhanVien(
+    p_MaNV VARCHAR2,
+    p_new_pass VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); -- Thay thế bằng khóa mã hóa thực tế
+    Mahoa_pass RAW(32);
+BEGIN
+    -- Mã hóa mật khẩu mới
+    Mahoa_pass := DBMS_CRYPTO.ENCRYPT(
+        src => UTL_RAW.CAST_TO_RAW(p_new_pass),
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key
+    );
+
+    -- Cập nhật mật khẩu mới cho nhân viên
+    UPDATE NhanVien
+    SET Pass = Mahoa_pass
+    WHERE MaNV = p_MaNV;
+
+    COMMIT;
+END;
+/
+BEGIN
+    DoiMatKhau_NhanVien('NV001',  '123');
+END;
+--================================================GIẢI MÃ NHÂN VIÊN============================================================
+--Thủ tục giải mã dữ liệu nhân viên
+CREATE OR REPLACE PROCEDURE GiaiMaVaXuatThongTin(
+    p_MaNV VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx');
+    v_MaNV VARCHAR2(50);
+    v_Email RAW(128);
+    v_Pass RAW(128);
+    GiaiMa_Email VARCHAR2(100);
+    //GiaiMa_Pass VARCHAR2(100);
+BEGIN
+    SELECT MaNV, Email, Pass
+    INTO v_MaNV, v_Email, v_Pass
+    FROM NhanVien
+    WHERE MaNV = p_MaNV;
+
+    GiaiMa_Pass := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+        src => v_Pass,
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key,
+        iv => NULL
+    ));
+
+    GiaiMa_Email := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+        src => v_Email,
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key,
+        iv => NULL
+    ));
+
+    -- Xuất thông tin đã giải mã
+    DBMS_OUTPUT.PUT_LINE('Mã nhân viên: ' || v_MaNV);
+    DBMS_OUTPUT.PUT_LINE('Email: ' || GiaiMa_Email);
+    //DBMS_OUTPUT.PUT_LINE('Mat khau: ' || GiaiMa_Pass);
+END;
+
+DROP PROCEDURE GiaiMaVaXuatThongTin;
+/
+SET SERVEROUTPUT ON;
+BEGIN
+    GiaiMaVaXuatThongTin('NV001');
+END;
+/
+
+--=================================================ĐĂNG NHẬP===========================================================
+CREATE OR REPLACE PROCEDURE DangNhap2(
+    p_MaNV VARCHAR2,
+    p_Pass VARCHAR2,
+    p_Result OUT VARCHAR2,
+    p_Quyen OUT VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx');
+    v_Email RAW(128);
+    v_Encrypted_Pass RAW(128);
+    v_Pass VARCHAR2(100);
+BEGIN
+    SELECT Pass, Quyen
+    INTO v_Encrypted_Pass, p_Quyen
+    FROM sys.NhanVien
+    WHERE MaNV = p_MaNV;
+
+    v_Pass := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+        src => v_Encrypted_Pass,
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key
+    ));
+
+    IF p_Pass = v_Pass THEN
+        p_Result := '0';
+    ELSE
+        p_Result := '1';
+    END IF;
+END;
+
+--=============================================TẠO USER VÀ CẤP QUYỀN=================================================
+--Thủ tục tạo user và phân quyền cho user 
+CREATE OR REPLACE PROCEDURE TaoUser(
+    p_user VARCHAR2,
+    p_pass VARCHAR2,
+    p_Quyen VARCHAR2
+) AS
+BEGIN
+    BEGIN
+        EXECUTE IMMEDIATE 'CREATE USER ' || p_user || ' IDENTIFIED BY ' || p_pass || ' PROFILE NhanVien';
+        EXECUTE IMMEDIATE 'GRANT CREATE SESSION TO ' || p_user;
+        
+        IF p_Quyen = 'Nhan Vien' THEN
+            EXECUTE IMMEDIATE 'GRANT NhanVien_ROLE TO ' || p_user;
+        ELSIF p_Quyen = 'Admin' THEN
+            EXECUTE IMMEDIATE 'GRANT QuanTriVien_ROLE TO ' || p_user;
+        END IF;
+        
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+            ROLLBACK;
+    END;
+END;
+/
+--update
+CREATE OR REPLACE PROCEDURE TaoUser(
+    p_user VARCHAR2,
+    p_pass VARCHAR2,
+    p_Quyen VARCHAR2
+) AS
+BEGIN
+    BEGIN
+        EXECUTE IMMEDIATE 'CREATE USER ' || p_user || ' IDENTIFIED BY ' || p_pass || ' PROFILE NhanVien';
+        EXECUTE IMMEDIATE 'GRANT CREATE SESSION TO ' || p_user;
+        -- Thêm lệnh AUDIT vào thủ tục
+        EXECUTE IMMEDIATE 'AUDIT SELECT TABLE, UPDATE TABLE, DELETE TABLE, INSERT TABLE BY ' || p_user;
+
+        IF p_Quyen = 'Nhan Vien' THEN
+            EXECUTE IMMEDIATE 'GRANT NhanVien_ROLE TO ' || p_user;
+        ELSIF p_Quyen = 'Admin' THEN
+            EXECUTE IMMEDIATE 'GRANT QuanTriVien_ROLE TO ' || p_user;
+        END IF;
+
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+            ROLLBACK;
+    END;
+END;
+/
+
+BEGIN
+    TaoUser('NV005', 'NV005','NhanVien');
+END;
+
+drop user NV001;
+--Thủ tục xoa user và phân quyền cho user 
+CREATE OR REPLACE PROCEDURE XoaUser(
+    p_user VARCHAR2
+) AS
+BEGIN
+    BEGIN
+        EXECUTE IMMEDIATE 'DROP USER ' || p_user || ' CASCADE';
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+            ROLLBACK;
+    END;
+END;
+BEGIN
+    XoaUser('NV001');
+END;
+
+--Thủ tục thêm nhân viên ko dùng thuật toán
+CREATE OR REPLACE PROCEDURE ThemNhanVien(
+    p_MaNV IN VARCHAR2,
+    p_TenNV IN VARCHAR2,
+    p_GioiTinh IN VARCHAR2,
+    p_NgaySinh IN DATE,
+    p_DiaChi IN VARCHAR2,
+    p_SoDT IN VARCHAR2,
+    p_Email IN VARCHAR2,
+    p_Pass IN VARCHAR2,
+    p_Quyen IN VARCHAR2
+) AS
+BEGIN
+    INSERT INTO NhanVien(MaNV, TenNV, GioiTinh, NgaySinh, DiaChi, SoDT, Email, Pass, Quyen)
+    VALUES(p_MaNV, p_TenNV, p_GioiTinh, p_NgaySinh, p_DiaChi, p_SoDT, p_Email, p_Pass, p_Quyen);
+    COMMIT;
+END ;
+/
+EXECUTE ThemNhanVien('NV002', 'Nguyen Van Anh', 'Nam', TO_DATE('2000-01-01', 'YYYY-MM-DD'), 'Binh Tan', '0332673425', 'nva@gmail.com', '123', 'Admin');
+
+--=======================================Tuan5==========================================================
+--Tạo hai nhóm quyền là quản trị viên và nhân viên
+CREATE ROLE QuanTriVien_ROLE;
+CREATE ROLE NhanVien_ROLE;
+
+--Lệnh xóa nhóm quyền
+DROP ROLE QuanTriVien_ROLE;
+DROP ROLE NhanVien_ROLE;
+
+-- Gán quyền SELECT, INSERT, UPDATE và DELETE cho nhóm QuanTriVien trên bảng NhanVien
+GRANT SELECT, INSERT, UPDATE, DELETE 
+ON NV001.GiamSatUser
+TO QuanTriVien_ROLE;
+
+GRANT SELECT, INSERT, UPDATE, DELETE 
+ON NV001.NhanVien
+TO QuanTriVien_ROLE;
+
+--Xóa quyền đã cấp
+REVOKE SELECT, INSERT, UPDATE, DELETE 
+ON NV001.NhanVien 
+FROM QuanTriVien_ROLE;
+
+-- Gán quyền SELECT, INSERT, UPDATE và DELETE cho nhóm QuanTriVien trên bảng KhachHang
+GRANT SELECT, INSERT, UPDATE, DELETE 
+ON NV001.KhachHang
+TO QuanTriVien_ROLE;
+-- Gán quyền SELECT, INSERT, UPDATE và DELETE cho nhóm QuanTriVien trên bảng HoaDon
+GRANT SELECT, INSERT, UPDATE, DELETE 
+ON NV001.HoaDon
+TO QuanTriVien_ROLE;
+-- Gán quyền SELECT, INSERT, UPDATE và DELETE cho nhóm QuanTriVien trên bảng ChiTietHoaDon
+GRANT SELECT, INSERT, UPDATE, DELETE 
+ON NV001.ChiTietHoaDon
+TO QuanTriVien_ROLE;
+-- Gán quyền SELECT, INSERT, UPDATE và DELETE cho nhóm QuanTriVien trên bảng MonAn 
+GRANT SELECT, INSERT, UPDATE, DELETE 
+ON NV001.MonAn 
+TO QuanTriVien_ROLE;
+
+-- Gán quyền SELECT cho nhóm NhanVien trên bảng NhanVien,MonAn
+GRANT SELECT 
+ON NV001.NhanVien
+TO NhanVien_ROLE;
+
+GRANT SELECT 
+ON NV001.MonAn 
+TO NhanVien_ROLE;
+
+GRANT SELECT 
+ON NV001.BanAn 
+TO NhanVien_ROLE;
+
+-- Gán quyền SELECT, INSERT, UPDATE và DELETE cho nhóm NhanVien trên bảng KhachHang,HoaDon,ChiTietHoaDon
+GRANT SELECT ON sys.NhanVien TO NhanVien_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON NV001.KhachHang TO NhanVien_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON NV001.HoaDon TO NhanVien_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON NV001.ChiTietHoaDon TO NhanVien_ROLE;
+
+--Grant thu tuc, trigger cho nhóm  quyền QuanTriVien_ROLE
+GRANT EXECUTE ON CAPNHATKHACHHANG TO QuanTriVien_ROLE;
+GRANT EXECUTE ON CAPNHATNHANVIEN TO QuanTriVien_ROLE;
+GRANT EXECUTE ON CapNhatMon_AES_SHA TO QuanTriVien_ROLE;
+GRANT EXECUTE ON DangNhap2 TO QuanTriVien_ROLE;
+GRANT EXECUTE ON GiaiMaVaXuatThongTin TO QuanTriVien_ROLE;
+GRANT EXECUTE ON GIAIMAVAXUATTHONGTINKHACHHANG TO QuanTriVien_ROLE;
+GRANT EXECUTE ON GIAIMAVAXUATTHONGTIN_MONAN TO QuanTriVien_ROLE;
+GRANT EXECUTE ON GiaiMaVaXuatThongTinBanAn TO QuanTriVien_ROLE;
+GRANT EXECUTE ON giam_sat_user TO QuanTriVien_ROLE;
+GRANT EXECUTE ON GiamSatUserLogin_trigger TO QuanTriVien_ROLE;
+GRANT EXECUTE ON GiamSatUserLogout_trigger TO QuanTriVien_ROLE;
+
+GRANT EXECUTE ON ThemNhanVien_AES TO QuanTriVien_ROLE;
+GRANT EXECUTE ON ThemNhanVien_SHA TO QuanTriVien_ROLE;
+GRANT EXECUTE ON THEMKHACHHANG_AES TO QuanTriVien_ROLE;
+GRANT EXECUTE ON THEMMON_AES_SHA TO QuanTriVien_ROLE;
+GRANT EXECUTE ON THEMBANAN_AES TO QuanTriVien_ROLE;
+GRANT EXECUTE ON XoaUser TO QuanTriVien_ROLE;
+
+--Grant thu tuc, trigger cho nhóm  quyền NhanVien_ROLE
+GRANT EXECUTE ON CAPNHATKHACHHANG TO NhanVien_ROLE;
+GRANT EXECUTE ON CapNhatMon_AES_SHA TO NhanVien_ROLE;
+GRANT EXECUTE ON DangNhap2 TO NhanVien_ROLE;
+GRANT EXECUTE ON THEMKHACHHANG_AES TO NhanVien_ROLE;
+GRANT EXECUTE ON THEMMON_AES_SHA TO NhanVien_ROLE;
+GRANT EXECUTE ON THEMBANAN_AES TO NhanVien_ROLE;
+GRANT EXECUTE ON GiaiMaVaXuatThongTin TO NhanVien_ROLE;
+GRANT EXECUTE ON GIAIMAVAXUATTHONGTINKHACHHANG TO NhanVien_ROLE;
+GRANT EXECUTE ON GIAIMAVAXUATTHONGTIN_MONAN TO NhanVien_ROLE;
+GRANT EXECUTE ON GiaiMaVaXuatThongTinBanAn TO NhanVien_ROLE;
+
+--Tao view
+CREATE VIEW NhanVienPassView AS SELECT Pass FROM NhanVien;
+GRANT SELECT ON NhanVienPassView TO NhanVien_ROLE;
+--===============================================GIAM SAT USERS AUDIT=============================================
+NOAUDIT ALL;
+NOAUDIT ALL PRIVILEGES;
+
+AUDIT ROLE;
+AUDIT ROLE WHENEVER SUCCESSFUL;
+
+AUDIT SELECT TABLE;
+AUDIT SELECT TABLE, UPDATE TABLE;
+AUDIT DELETE ANY TABLE;
+
+AUDIT ALTER, GRANT, INSERT, UPDATE, DELETE
+ON NV001.NhanVien;
+
+AUDIT SELECT TABLE, UPDATE TABLE, DELETE TABLE, INSERT TABLE BY NV001;
+
+CREATE OR REPLACE PROCEDURE giam_sat_user(p_username IN VARCHAR2, p_jobname IN VARCHAR2) AS
+BEGIN
+  FOR r IN (SELECT username, TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS formatted_timestamp, obj_name, action_name, COUNT(*) AS so_luong
+            FROM dba_audit_trail
+            WHERE username = p_username AND obj_name = p_jobname
+            GROUP BY username, timestamp, obj_name, action_name)
+  LOOP
+    -- Thực hiện xử lý với dữ liệu từ kết quả truy vấn ở trên
+    -- Ví dụ: IN ra các giá trị hoặc lưu vào một bảng tạm thời, v.v.
+    DBMS_OUTPUT.PUT_LINE('Username: ' || r.username || ', Timestamp: ' || r.formatted_timestamp || ', Obj Name: ' || r.obj_name || ', Action Name: ' || r.action_name || ', So luong: ' || r.so_luong);
+  END LOOP;
+END;
+/
+SET SERVEROUTPUT ON;
+EXECUTE giam_sat_user('NV001', 'NHANVIEN');
+--=================================================GIAM SAT USERS=================================================
+--GIAM SAT HOAT DONG USER 
+SELECT * FROM GiamSatUser;
+DELETE FROM GiamSatUser;
+DROP TABLE GiamSatUser;
+DROP TRIGGER GiamSatUserLogin_trigger;
+DROP TRIGGER GiamSatUserLogout_trigger;
+
+alter user TanHuy identified by TanHuy;
+-- Tạo bảng lưu lịch sử giám sát đăng nhập và đăng xuất
+CREATE TABLE GiamSatUser (
+    key_id NUMBER PRIMARY KEY,
+    username VARCHAR2(50),
+    login_time TIMESTAMP,
+    logout_time TIMESTAMP,
+    hoat_dong VARCHAR2(50)
+);
+
+-- Tạo sequence để tạo giá trị duy nhất cho key_id
+CREATE SEQUENCE GiamSatDangNhap;
+ALTER SEQUENCE GiamSatDangNhap MINVALUE 0;
+SELECT GiamSatDangNhap.NEXTVAL FROM dual;
+ALTER SEQUENCE GiamSatDangNhap MINVALUE 1;
+
+-- Trigger giám sát đăng nhập
+CREATE OR REPLACE TRIGGER GiamSatUserLogin_trigger
+AFTER LOGON ON DATABASE
+BEGIN
+    INSERT INTO GiamSatUser (key_id, username, login_time, hoat_dong)
+    VALUES (GiamSatDangNhap.NEXTVAL, USER, SYSTIMESTAMP, 'Login');
+END GiamSatUserLogin_trigger;
+
+-- Trigger giám sát đăng xuất
+CREATE OR REPLACE TRIGGER GiamSatUserLogout_trigger
+BEFORE LOGOFF ON DATABASE
+BEGIN
+    INSERT INTO GiamSatUser (key_id, username, logout_time, hoat_dong)
+    VALUES (GiamSatDangNhap.NEXTVAL, USER, SYSTIMESTAMP, 'Logout');
+END GiamSatUserLogout_trigger;
+--UPDATE LẠI TRIGER
+-- Trigger giám sát đăng nhập
+CREATE OR REPLACE TRIGGER GiamSatUserLogin_trigger
+AFTER LOGON ON DATABASE
+BEGIN
+    IF USER != 'SYS' THEN
+        INSERT INTO GiamSatUser (key_id, username, login_time, hoat_dong)
+        VALUES (GiamSatDangNhap.NEXTVAL, USER, SYSTIMESTAMP, 'Login');
+    END IF;
+END GiamSatUserLogin_trigger;
+
+-- Trigger giám sát đăng xuất
+CREATE OR REPLACE TRIGGER GiamSatUserLogout_trigger
+BEFORE LOGOFF ON DATABASE
+BEGIN
+    IF USER != 'SYS' THEN
+        INSERT INTO GiamSatUser (key_id, username, logout_time, hoat_dong)
+        VALUES (GiamSatDangNhap.NEXTVAL, USER, SYSTIMESTAMP, 'Logout');
+    END IF;
+END GiamSatUserLogout_trigger;
+
+--Giám sát thiết bị truy cập
+SELECT SCHEMANAME, MACHINE, PROGRAM, TYPE, MODULE
+FROM v$session
+WHERE TYPE = 'USER';
+-- Trạng thái user
+SELECT username, account_status
+FROM dba_users
+WHERE username = 'NV001';
+--
+SELECT username, TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS formatted_timestamp, obj_name, action_name, COUNT(*) AS so_luong
+FROM dba_audit_trail
+WHERE username = 'NV001' AND obj_name = 'NHANVIEN'
+GROUP BY username, timestamp, obj_name, action_name;
+--
+CREATE OR REPLACE PROCEDURE kiem_tra_trang_thai (
+    p_ma_nv IN VARCHAR2,
+    p_trang_thai OUT VARCHAR2
+) IS
+  v_username VARCHAR2(30);
+  v_account_status VARCHAR2(30);
+BEGIN
+  SELECT username, account_status
+  INTO v_username, v_account_status
+  FROM dba_users
+  WHERE username = p_ma_nv;
+
+  -- Gán giá trị trạng thái vào biến đầu ra
+  p_trang_thai := v_account_status;
+  -- In ra giá trị trạng thái (tùy chọn)
+  DBMS_OUTPUT.PUT_LINE('Trang thai ' || p_ma_nv || ': ' || v_account_status);
+END;
+/
+
+DECLARE
+  v_trang_thai VARCHAR2(30);
+BEGIN
+  kiem_tra_trang_thai('NV001', v_trang_thai);
+  DBMS_OUTPUT.PUT_LINE('Trang thai: ' || v_trang_thai);
+END;
+/
+
+--==============================================PROFILE======================================================
+
+GRANT CREATE PROFILE TO NV001;
+--DANH CHO USER version update
+CREATE PROFILE NhanVien LIMIT 
+    FAILED_LOGIN_ATTEMPTS 3
+    SESSIONS_PER_USER 3  
+    CONNECT_TIME 45 
+    IDLE_TIME 5
+    PASSWORD_LOCK_TIME 5;
+    
+DROP PROFILE profile_user CASCADE;
+
+--danh cho user
+CREATE PROFILE NhanVien LIMIT
+  FAILED_LOGIN_ATTEMPTS 3 -- Số lần nhập sai mật khẩu là 3.
+  PASSWORD_LOCK_TIME 5; --Thời gian khoá tài khoản sau một số lần nhập sai mật khẩu là 5 ngày.
+  
+ALTER USER TanHuy PROFILE NhanVien;
+
+ALTER USER TanHuy ACCOUNT UNLOCK;
+
+CREATE USER NguyenHuy IDENTIFIED BY NguyenHuy
+PROFILE NhanVien;
+
+SELECT tablespace_name
+FROM dba_tablespaces;
+
+CREATE USER Nguyen IDENTIFIED BY TanHuy
+  PROFILE NhanVien
+  DEFAULT TABLESPACE USERS --Người dùng "NguyenHuy" được chỉ định sử dụng tablespace mặc định là "USERS."
+  TEMPORARY TABLESPACE TEMP--Người dùng "NguyenHuy" được chỉ định sử dụng tablespace tạm thời "temp."
+  QUOTA 500M ON USERS;--Người dùng "NguyenHuy" được cấp quyền với giới hạn lưu trữ (quota) 500MB trên tablespace "USERS."
+--===================================================USER===================================================
+
+
+CREATE TABLESPACE temp_NhanVien
+  DATAFILE 'E:\HOC_KI_1_NAM_4\DoAn_BaoMat_HTTT\DoAn_BaoMat_HTTT_Tuan4\temp_nhanvien.dbf' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED;
+CREATE USER VanHoang IDENTIFIED BY 123 DEFAULT TABLESPACE temp_NhanVien;
+GRANT CONNECT TO VanHoang;
+GRANT CREATE SESSION TO VanHoang;
+GRANT SELECT ON sys.NhanVien TO VanHoang;
+commit;
+GRANT CREATE TABLE TO VanHoang;
+SELECT * FROM USER_TAB_PRIVS WHERE TABLE_NAME = 'NhanVien';
+
+
+--================================================HAM BAM THUAT TOAN SHA-256=============================================
+
+CREATE OR REPLACE PROCEDURE ThemNhanVien_SHA(
+p_MaNV VARCHAR2,
+    p_TenNV VARCHAR2,
+    p_GioiTinh VARCHAR2,
+    p_NgaySinh DATE,
+    p_DiaChi VARCHAR2,
+    p_SoDT VARCHAR2,
+    p_Email VARCHAR2,
+    p_Pass VARCHAR2,
+    p_Quyen VARCHAR2
+) AS
+    v_BamGioiTinh VARCHAR2(100); -- Biến tạm thời để lưu giá trị băm của giới tính
+BEGIN
+    -- Băm giới tính bằng hàm SHA-256
+    v_BamGioiTinh := SYS.DBMS_CRYPTO.HASH(SYS.UTL_RAW.CAST_TO_RAW(p_GioiTinh), 3);
+    
+    INSERT INTO NhanVien (MaNV, TenNV, GioiTinh, NgaySinh, DiaChi, SoDT, Email, Pass, Quyen)
+    VALUES (p_MaNV, p_TenNV, v_BamGioiTinh, p_NgaySinh, p_DiaChi, p_SoDT, p_Email, p_Pass, p_Quyen);
+    
+    COMMIT;
+    
+    DBMS_OUTPUT.PUT_LINE('Thêm nhân viên thành công.');
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+        ROLLBACK;
+END ThemNhanVien_SHA;
+
+-- Gọi thủ tục và truyền các tham số
+EXECUTE ThemNhanVien_SHA('NV001', 'Nguyen Tan Huy', 'Nam', TO_DATE('1990-01-01', 'yyyy-mm-dd'), '123 ABC Street', '123456789', 'email@example.com', 'hashed_password', 'Quyen1');
+
+select* from nhanvien
+
+DELETE FROM NhanVien
+WHERE MaNV = 'NV001';
+
+--===========================================================================================================
+--===============================================KHACH_HANG==================================================
+--===========================================================================================================
+CREATE OR REPLACE PROCEDURE CapNhatKhachHang(
+    p_MaKH VARCHAR2,
+    p_TenKH VARCHAR2,
+    p_GioiTinh VARCHAR2,
+    p_NgaySinh DATE,
+    p_DiaChi VARCHAR2,
+    p_SoDT VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); -- Thay thế bằng khóa mã hóa thực tế
+    Mahoa_tenKH RAW(32);
+BEGIN
+    Mahoa_tenKH := DBMS_CRYPTO.ENCRYPT(
+        src => UTL_RAW.CAST_TO_RAW(p_TenKH),
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key
+    );
+    UPDATE KHACHHANG
+    SET TENKH = Mahoa_tenKH,
+        GioiTinh = p_GioiTinh,
+        NgaySinh = p_NgaySinh,
+        DiaChi = p_DiaChi,
+        SoDT = p_SoDT
+    WHERE MAKH = p_MaKH;
+    COMMIT;
+END;
+
+--====================================================================
+
+CREATE OR REPLACE PROCEDURE ThemKhachHang_AES(
+    p_MaKH VARCHAR2,
+    p_TenKH VARCHAR2,
+    p_GioiTinh VARCHAR2,
+    p_NgaySinh DATE,
+    p_DiaChi VARCHAR2,
+    p_SoDT VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); -- Thay thế bằng khóa mã hóa thực tế
+    Mahoa_tenKH RAW(32);
+BEGIN
+    -- Mã hóa tên khách hàng
+    Mahoa_tenKH := DBMS_CRYPTO.ENCRYPT(
+    src => UTL_RAW.CAST_TO_RAW(p_TenKH),
+    typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+    key => v_key
+    );
+
+    INSERT INTO KHACHHANG (MAKH, TENKH, GioiTinh, NgaySinh, DiaChi, SoDT)
+    VALUES (p_MaKH, Mahoa_tenKH, p_GioiTinh, p_NgaySinh, p_DiaChi, p_SoDT);
+    COMMIT;
+END;
+
+--====================================================================
+
+CREATE OR REPLACE PROCEDURE GiaiMaVaXuatThongTinKhachHang(
+    p_MaKH VARCHAR2,
+    p_ten_giaima OUT VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx');
+    v_MaKH VARCHAR2(50);
+    v_TenKH RAW(128);
+BEGIN
+
+    SELECT MaKH, TENKH
+    INTO v_MaKH, v_TenKH
+    FROM KHACHHANG
+    WHERE MaKH = p_MaKH;
+
+    p_ten_giaima := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+        src => v_TenKH,
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key,
+        iv => NULL
+    ));
+    commit;
+END;
+
+--====================================================================
+CREATE OR REPLACE PROCEDURE ThemMon_AES_SHA(
+    p_MaMon VARCHAR2,
+    p_TenMon VARCHAR2,
+    p_LoaiMon VARCHAR2,
+    p_GiaTien NUMBER
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); 
+    Mahoa_TenMon RAW(32);
+    v_BamLoaiMon VARCHAR2(100); -- Biến tạm thời để lưu giá trị băm của LoaiMon
+BEGIN
+    -- MĂ£ hĂ³a máº­t kháº©u vĂ  email
+    Mahoa_TenMon := DBMS_CRYPTO.ENCRYPT(
+    src => UTL_RAW.CAST_TO_RAW(p_TenMon),
+    typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+    key => v_key
+    );
+
+     v_BamLoaiMon := SYS.DBMS_CRYPTO.HASH(SYS.UTL_RAW.CAST_TO_RAW(p_LoaiMon), 3);
+
+    INSERT INTO NV001.MonAn (MaMon, TenMon, LoaiMon, GiaTien)
+    VALUES (p_MaMon, Mahoa_TenMon, v_BamLoaiMon, p_GiaTien);
+    COMMIT;
+    EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+        ROLLBACK;
+END;
+SET SERVEROUTPUT ON;
+BEGIN
+    ThemMon_AES_SHA('MA002', 'Pho', 'Do An', 35000);
+END;
+
+create or replace PROCEDURE CapNhatMon_AES_SHA(
+    p_MaMon VARCHAR2,
+    p_TenMon VARCHAR2,
+    p_LoaiMon VARCHAR2,
+    p_GiaTien NUMBER
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx'); 
+    Mahoa_TenMon RAW(32);
+    v_BamLoaiMon VARCHAR2(100); -- Biến tạm thời để lưu giá trị băm của LoaiMon
+BEGIN
+    -- MĂ£ hĂ³a máº­t kháº©u vĂ  email
+    Mahoa_TenMon := DBMS_CRYPTO.ENCRYPT(
+    src => UTL_RAW.CAST_TO_RAW(p_TenMon),
+    typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+    key => v_key
+    );
+
+     v_BamLoaiMon := SYS.DBMS_CRYPTO.HASH(SYS.UTL_RAW.CAST_TO_RAW(p_LoaiMon), 3);
+
+    UPDATE MONAN
+    SET TENMON = Mahoa_TenMon,
+        LOAIMON = v_BamLoaiMon,
+        GIATIEN = p_GiaTien
+    WHERE MAMON = p_MaMon;
+    COMMIT;
+    EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Lỗi: ' || SQLERRM);
+        ROLLBACK;
+END;
+
+create or replace PROCEDURE GiaiMaVaXuatThongTin_MONAN(
+    p_MaMon VARCHAR2,
+    p_GiaiMa_TenMon OUT VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx');
+    v_MaMon VARCHAR2(50);
+    v_TenMon RAW(128);
+BEGIN
+
+    SELECT MaMon, TenMon
+    INTO v_MaMon, v_TenMon
+    FROM MonAn
+    WHERE MaMon = p_MaMon;
+
+    p_GiaiMa_TenMon := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+        src => v_TenMon,
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key,
+        iv => NULL
+    ));
+    commit;
+END;
+
+create or replace PROCEDURE GiaiMaVaXuatThongTinBanAn(
+    p_MaBan VARCHAR2,
+    p_ten_giaima OUT VARCHAR2
+) AS
+    v_key RAW(32) := UTL_RAW.CAST_TO_RAW('R7tFg5A2zE9hVd1QpYsM8LcKw6XjJbWx');
+    v_MaBan VARCHAR2(50);
+    v_TenBan RAW(128);
+BEGIN
+
+    SELECT MABAN, TENBAN
+    INTO v_MaBan, v_TenBan
+    FROM BANAN
+    WHERE MABAN = p_MaBan;
+
+    p_ten_giaima := UTL_RAW.CAST_TO_VARCHAR2(DBMS_CRYPTO.DECRYPT(
+        src => v_TenBan,
+        typ => DBMS_CRYPTO.ENCRYPT_AES256 + DBMS_CRYPTO.CHAIN_CBC + DBMS_CRYPTO.PAD_PKCS5,
+        key => v_key,
+        iv => NULL
+    ));
+    commit;
+END;
